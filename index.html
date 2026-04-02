@@ -332,6 +332,9 @@ var seconds=0;
 var finalT='';
 var interimT='';
 var deferredInstall=null;
+var srClass=null;
+var srShouldRestart=false;
+var srErrCount=0;
 
 /* ── init ── */
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
@@ -516,7 +519,7 @@ function stopRecording(){
     var b=document.getElementById('wb'+i);
     b.style.height='4px';b.style.animation='';b.classList.remove('on');
   });
-  if(recognition){try{recognition.onend=null;recognition.onresult=null;recognition.onerror=null;recognition.stop();}catch(e){}recognition=null;}
+  killSR();
   if(audioCtx){try{audioCtx.close();}catch(e){}audioCtx=null;}
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(interimT.trim()){finalT+=interimT.trim()+' ';interimT='';renderTranscript();}
@@ -550,65 +553,107 @@ function startWaveform(stream){
 
 function startSR(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){document.getElementById('recStatusText').textContent='Recording (type notes below)';return;}
-  createSRInstance(SR);
+  if(!SR){
+    document.getElementById('recStatusText').textContent='Speech not supported — type notes below';
+    return;
+  }
+  srClass=SR;
+  srShouldRestart=true;
+  spawnSR();
 }
 
-function createSRInstance(SR){
-  // Always create a brand-new instance on every restart.
-  // Chrome mobile CANNOT reuse the same SpeechRecognition object after it ends.
+function killSR(){
+  srShouldRestart=false;
   if(recognition){
-    try{recognition.onend=null;recognition.onresult=null;recognition.onerror=null;recognition.stop();}catch(e){}
+    try{
+      recognition.onstart=null;
+      recognition.onresult=null;
+      recognition.onerror=null;
+      recognition.onend=null;
+      recognition.abort();
+    }catch(e){}
+    recognition=null;
   }
-  recognition=null;
-  if(!isRecording)return;
+}
 
-  var r=new SR();
-  // continuous=false is more reliable on Chrome Android than continuous=true
-  r.continuous=false;
+function spawnSR(){
+  if(!isRecording||!srShouldRestart)return;
+
+  // Destroy any previous instance completely before creating a new one
+  if(recognition){
+    try{
+      recognition.onstart=null;
+      recognition.onresult=null;
+      recognition.onerror=null;
+      recognition.onend=null;
+      recognition.abort();
+    }catch(e){}
+    recognition=null;
+  }
+
+  var r=new srClass();
+  r.continuous=false;      // false works on Android; true silently breaks
   r.interimResults=true;
   r.lang=srLang;
   r.maxAlternatives=1;
 
   r.onstart=function(){
-    document.getElementById('recStatusText').textContent='Listening…';
+    srErrCount=0;
+    setStatus('Listening…');
   };
 
   r.onresult=function(e){
     interimT='';
     for(var i=e.resultIndex;i<e.results.length;i++){
       var t=e.results[i][0].transcript;
-      if(e.results[i].isFinal)finalT+=t+' ';
-      else interimT+=t;
+      if(e.results[i].isFinal){ finalT+=t+' '; }
+      else { interimT+=t; }
     }
     renderTranscript();
   };
 
   r.onerror=function(e){
     if(e.error==='not-allowed'||e.error==='service-not-allowed'){
-      stopRecording();showToast('Mic permission denied');
-    } else if(e.error==='network'){
-      document.getElementById('recStatusText').textContent='No internet for speech — type notes below';
+      srShouldRestart=false;
+      stopRecording();
+      showToast('Microphone permission denied');
+      return;
     }
-    // aborted / no-speech: let onend handle the restart
+    if(e.error==='network'){
+      setStatus('No network for speech — type notes below');
+      srShouldRestart=false; // no point retrying without network
+      return;
+    }
+    // no-speech / aborted / audio-capture: harmless, onend will restart
+    srErrCount=(srErrCount||0)+1;
+    if(srErrCount>10){
+      // Too many consecutive errors, bail out gracefully
+      setStatus('Speech stopped — tap mic again or type below');
+      srShouldRestart=false;
+    }
   };
 
   r.onend=function(){
-    // Flush any partial interim text when the session closes
+    // Flush partial interim when session closes mid-word
     if(interimT.trim()){finalT+=interimT.trim()+' ';interimT='';renderTranscript();}
-    if(!isRecording)return;
-    // Chrome mobile needs a short pause before a new instance can start
-    setTimeout(function(){
-      if(isRecording)createSRInstance(SR);
-    },150);
+    if(!isRecording||!srShouldRestart)return;
+    setStatus('Listening…');
+    // Android needs 300ms gap before a new instance can start
+    setTimeout(spawnSR, 300);
   };
 
   recognition=r;
   try{
     r.start();
   }catch(e){
-    setTimeout(function(){if(isRecording)createSRInstance(SR);},300);
+    // start() can throw if called too soon after abort() — wait longer
+    setTimeout(spawnSR, 500);
   }
+}
+
+function setStatus(txt){
+  var el=document.getElementById('recStatusText');
+  if(el)el.textContent=txt;
 }
 
 /* ── transcript ── */
