@@ -516,7 +516,7 @@ function stopRecording(){
     var b=document.getElementById('wb'+i);
     b.style.height='4px';b.style.animation='';b.classList.remove('on');
   });
-  if(recognition){try{recognition.stop();}catch(e){}recognition=null;}
+  if(recognition){try{recognition.onend=null;recognition.onresult=null;recognition.onerror=null;recognition.stop();}catch(e){}recognition=null;}
   if(audioCtx){try{audioCtx.close();}catch(e){}audioCtx=null;}
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(interimT.trim()){finalT+=interimT.trim()+' ';interimT='';renderTranscript();}
@@ -551,22 +551,64 @@ function startWaveform(stream){
 function startSR(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){document.getElementById('recStatusText').textContent='Recording (type notes below)';return;}
-  recognition=new SR();
-  recognition.continuous=true;recognition.interimResults=true;recognition.lang=srLang;recognition.maxAlternatives=1;
-  recognition.onresult=function(e){
+  createSRInstance(SR);
+}
+
+function createSRInstance(SR){
+  // Always create a brand-new instance on every restart.
+  // Chrome mobile CANNOT reuse the same SpeechRecognition object after it ends.
+  if(recognition){
+    try{recognition.onend=null;recognition.onresult=null;recognition.onerror=null;recognition.stop();}catch(e){}
+  }
+  recognition=null;
+  if(!isRecording)return;
+
+  var r=new SR();
+  // continuous=false is more reliable on Chrome Android than continuous=true
+  r.continuous=false;
+  r.interimResults=true;
+  r.lang=srLang;
+  r.maxAlternatives=1;
+
+  r.onstart=function(){
+    document.getElementById('recStatusText').textContent='Listening…';
+  };
+
+  r.onresult=function(e){
     interimT='';
     for(var i=e.resultIndex;i<e.results.length;i++){
       var t=e.results[i][0].transcript;
-      if(e.results[i].isFinal)finalT+=t+' ';else interimT+=t;
+      if(e.results[i].isFinal)finalT+=t+' ';
+      else interimT+=t;
     }
     renderTranscript();
   };
-  recognition.onerror=function(e){
-    if(e.error==='not-allowed'){stopRecording();showToast('Mic permission denied');}
-    else if(e.error==='network'){document.getElementById('recStatusText').textContent='Recording (no SR network)';}
+
+  r.onerror=function(e){
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+      stopRecording();showToast('Mic permission denied');
+    } else if(e.error==='network'){
+      document.getElementById('recStatusText').textContent='No internet for speech — type notes below';
+    }
+    // aborted / no-speech: let onend handle the restart
   };
-  recognition.onend=function(){if(isRecording){try{recognition.start();}catch(x){}}};
-  try{recognition.start();document.getElementById('recStatusText').textContent='Listening…';}catch(x){}
+
+  r.onend=function(){
+    // Flush any partial interim text when the session closes
+    if(interimT.trim()){finalT+=interimT.trim()+' ';interimT='';renderTranscript();}
+    if(!isRecording)return;
+    // Chrome mobile needs a short pause before a new instance can start
+    setTimeout(function(){
+      if(isRecording)createSRInstance(SR);
+    },150);
+  };
+
+  recognition=r;
+  try{
+    r.start();
+  }catch(e){
+    setTimeout(function(){if(isRecording)createSRInstance(SR);},300);
+  }
 }
 
 /* ── transcript ── */
