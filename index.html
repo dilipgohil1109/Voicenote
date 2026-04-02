@@ -478,38 +478,33 @@ function toggleRecord(){if(isRecording)stopRecording();else startRecording();}
 
 function startRecording(){
   if(!activeSubject){showToast('Select a subject first!');return;}
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showToast('Microphone API not available');return;}
   finalT='';interimT='';renderTranscript();
-  document.getElementById('recStatusText').textContent='Requesting mic…';
 
-  navigator.mediaDevices.getUserMedia({audio:true,video:false})
-    .then(function(stream){
-      mediaStream=stream;
-      isRecording=true;seconds=0;
-      timerInterval=setInterval(function(){
-        seconds++;
-        var m=String(Math.floor(seconds/60)).padStart(2,'0');
-        var s=String(seconds%60).padStart(2,'0');
-        document.getElementById('recTimer').textContent=m+':'+s;
-      },1000);
-      startWaveform(stream);
-      startSR();
-      document.getElementById('recordBtn').classList.add('on');
-      document.getElementById('pring').classList.add('on');
-      document.getElementById('rdot').classList.add('on');
-      document.getElementById('rhint').textContent='TAP TO STOP';
-      showMicBanner('granted');
-    })
-    .catch(function(err){
-      document.getElementById('recStatusText').textContent='Ready to record';
-      if(err.name==='NotAllowedError'||err.name==='PermissionDeniedError'){
-        showMicBanner('denied');
-      }else if(err.name==='NotFoundError'){
-        showToast('No microphone found');
-      }else{
-        showToast('Mic error: '+(err.message||err.name));
-      }
-    });
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    showToast('Speech recognition not supported in this browser');
+    return;
+  }
+
+  isRecording=true;
+  seconds=0;
+  timerInterval=setInterval(function(){
+    seconds++;
+    var m=String(Math.floor(seconds/60)).padStart(2,'0');
+    var s=String(seconds%60).padStart(2,'0');
+    document.getElementById('recTimer').textContent=m+':'+s;
+  },1000);
+
+  // Start waveform animation (CSS only on Android — no getUserMedia conflict)
+  startWaveform(null);
+
+  // SR owns the mic entirely — no competing getUserMedia stream
+  startSR();
+
+  document.getElementById('recordBtn').classList.add('on');
+  document.getElementById('pring').classList.add('on');
+  document.getElementById('rdot').classList.add('on');
+  document.getElementById('rhint').textContent='TAP TO STOP';
 }
 
 function stopRecording(){
@@ -531,24 +526,29 @@ function stopRecording(){
 }
 
 function startWaveform(stream){
-  try{
-    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    var src=audioCtx.createMediaStreamSource(stream);
-    var analyser=audioCtx.createAnalyser();
-    analyser.fftSize=64;src.connect(analyser);
-    var data=new Uint8Array(analyser.frequencyBinCount);
-    var bars=[0,1,2,3,4,5,6,7].map(function(i){return document.getElementById('wb'+i);});
-    bars.forEach(function(b){b.classList.add('on');});
-    waveInterval=setInterval(function(){
-      analyser.getByteFrequencyData(data);
-      bars.forEach(function(b,i){var v=data[i*2]||0;b.style.height=(4+Math.round((v/255)*24))+'px';});
-    },80);
-  }catch(e){
-    [0,1,2,3,4,5,6,7].forEach(function(i){
-      var b=document.getElementById('wb'+i);b.classList.add('on');
-      b.style.animation='wv '+(0.5+Math.random()*0.7)+'s ease-in-out '+(Math.random()*0.4)+'s infinite alternate';
-    });
+  // If a real stream is provided, use AudioContext analyser for live waveform
+  if(stream){
+    try{
+      audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+      var src=audioCtx.createMediaStreamSource(stream);
+      var analyser=audioCtx.createAnalyser();
+      analyser.fftSize=64;src.connect(analyser);
+      var data=new Uint8Array(analyser.frequencyBinCount);
+      var bars=[0,1,2,3,4,5,6,7].map(function(i){return document.getElementById('wb'+i);});
+      bars.forEach(function(b){b.classList.add('on');});
+      waveInterval=setInterval(function(){
+        analyser.getByteFrequencyData(data);
+        bars.forEach(function(b,i){var v=data[i*2]||0;b.style.height=(4+Math.round((v/255)*24))+'px';});
+      },80);
+      return;
+    }catch(e){}
   }
+  // Fallback: CSS animation (used on Android where SR owns the mic)
+  [0,1,2,3,4,5,6,7].forEach(function(i){
+    var b=document.getElementById('wb'+i);
+    b.classList.add('on');
+    b.style.animation='wv '+(0.5+Math.random()*0.7)+'s ease-in-out '+(Math.random()*0.4)+'s infinite alternate';
+  });
 }
 
 function startSR(){
@@ -599,7 +599,9 @@ function spawnSR(){
 
   r.onstart=function(){
     srErrCount=0;
-    setStatus('Listening…');
+    setStatus('Listening… speak now');
+    // SR started successfully — mic is active
+    document.getElementById('rdot').classList.add('on');
   };
 
   r.onresult=function(e){
@@ -620,15 +622,20 @@ function spawnSR(){
       return;
     }
     if(e.error==='network'){
-      setStatus('No network for speech — type notes below');
-      srShouldRestart=false; // no point retrying without network
+      setStatus('No internet — speech transcription needs WiFi/data');
+      // Keep trying in case network comes back
       return;
     }
-    // no-speech / aborted / audio-capture: harmless, onend will restart
+    if(e.error==='audio-capture'){
+      // Mic busy — wait longer before retrying
+      setStatus('Mic busy, retrying…');
+      srErrCount=(srErrCount||0)+1;
+      return;
+    }
+    // no-speech / aborted: normal on Android, onend will restart
     srErrCount=(srErrCount||0)+1;
-    if(srErrCount>10){
-      // Too many consecutive errors, bail out gracefully
-      setStatus('Speech stopped — tap mic again or type below');
+    if(srErrCount>15){
+      setStatus('Speech stopped — tap mic to restart');
       srShouldRestart=false;
     }
   };
