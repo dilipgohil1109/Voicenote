@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0e0f11">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VoiceNote">
+<title>VoiceNote</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e0f11;--surface:#16181c;--surface2:#1e2128;--border:#2a2d35;
+  --accent:#e8c547;--accent2:#4ecdc4;--danger:#ff6b6b;
+  --text:#e8eaf0;--text2:#8b8fa8;--text3:#555970;--rec:#ff4444;--r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:13px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;letter-spacing:.04em}
+.logo span{color:var(--accent)}
+.hdate{font-size:11px;color:var(--text3);font-family:'IBM Plex Mono',monospace}
+
+.screen{display:none;padding:0 0 90px}
+.screen.active{display:block}
+
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100}
+nav button{flex:1;background:none;border:none;padding:10px 4px 14px;color:var(--text3);font-size:10px;font-family:'IBM Plex Mono',monospace;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:color .2s}
+nav button.active{color:var(--accent)}
+nav button svg{width:20px;height:20px}
+
+.stitle{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;padding:18px 16px 8px}
+
+.ifield{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s;width:100%}
+.ifield:focus{border-color:var(--accent)}
+.ifield::placeholder{color:var(--text3)}
+.btn{background:var(--accent);color:#0e0f11;border:none;border-radius:8px;padding:10px 18px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;cursor:pointer;transition:transform .1s;white-space:nowrap;display:inline-block}
+.btn:active{transform:scale(.96)}
+.btn.sec{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.btn.blk{width:100%;text-align:center;padding:13px}
+.addbar{display:flex;gap:10px;padding:8px 16px 16px;align-items:center}
+.addbar .ifield{flex:1;width:auto}
+
+.slist{padding:0 16px;display:flex;flex-direction:column;gap:10px}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:border-color .2s,background .2s;display:flex;align-items:center;justify-content:space-between}
+.scard.sel,.scard:active{border-color:var(--accent);background:var(--surface2)}
+.sname{font-weight:500;font-size:15px}
+.smeta{font-size:11px;color:var(--text2);margin-top:3px;font-family:'IBM Plex Mono',monospace}
+.sbadge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--text2)}
+
+.spill{background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin:0 16px}
+.pill-name{font-weight:500;font-size:15px}
+.pill-chg{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent2);cursor:pointer}
+.nowarn{background:var(--surface);border:1px dashed var(--border);border-radius:8px;padding:14px 16px;font-size:13px;color:var(--text3);text-align:center;margin:0 16px}
+.nowarn span{color:var(--accent);cursor:pointer;text-decoration:underline}
+
+.recarea{margin:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px 20px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.rstatus{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px}
+.rdot{width:8px;height:8px;border-radius:50%;background:var(--rec);display:none}
+.rdot.on{display:block;animation:blink 1s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+.rtimer{font-size:26px;font-weight:600;letter-spacing:.06em;color:var(--text);font-family:'IBM Plex Mono',monospace}
+.waveform{display:flex;align-items:center;gap:3px;height:32px}
+.wbar{width:3px;background:var(--accent);border-radius:2px;height:4px;opacity:.4}
+.wbar.on{opacity:.9}
+.rbwrap{position:relative;display:flex;align-items:center;justify-content:center}
+.pring{position:absolute;width:86px;height:86px;border-radius:50%;border:2px solid var(--rec);opacity:0;pointer-events:none}
+.pring.on{animation:pulse 1.4s ease-out infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.9);opacity:0}}
+.rbtn{width:68px;height:68px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,border-color .2s,transform .1s;position:relative;z-index:1}
+.rbtn:active{transform:scale(.93)}
+.rbtn.on{background:var(--rec);border-color:var(--rec)}
+.rbtn svg{width:30px;height:30px;transition:color .2s}
+.rhint{font-size:10px;color:var(--text3);font-family:'IBM Plex Mono',monospace;letter-spacing:.08em}
+
+.tbox{margin:0 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;min-height:90px;max-height:180px;overflow-y:auto;font-size:14px;line-height:1.65;color:var(--text2)}
+.tph{color:var(--text3);font-size:13px;font-style:italic}
+.interim{color:var(--text3);font-style:italic}
+.ractbar{display:flex;gap:10px;padding:10px 16px}
+.ractbar .btn{flex:1;text-align:center}
+.mbox{padding:0 16px 4px}
+.mbox textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;outline:none;resize:vertical;line-height:1.6;display:block}
+.mbox textarea:focus{border-color:var(--accent)}
+.mbox textarea::placeholder{color:var(--text3)}
+
+.nfilter{padding:8px 16px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.nfilter::-webkit-scrollbar{display:none}
+.chip{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .2s}
+.chip.on{background:var(--accent);color:#0e0f11;border-color:var(--accent);font-weight:600}
+.nlist{padding:0 16px;display:flex;flex-direction:column;gap:12px}
+.ncard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.nhead{padding:12px 14px;border-bottom:1px solid var(--border)}
+.ntag{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;display:inline-block}
+.ndate{font-size:11px;color:var(--text3);font-family:'IBM Plex Mono',monospace;margin-top:5px}
+.nbody{padding:12px 14px;font-size:13px;line-height:1.65;color:var(--text2)}
+.nacts{padding:10px 14px;display:flex;gap:8px;border-top:1px solid var(--border);flex-wrap:wrap}
+.nacts button{background:none;border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--text2);cursor:pointer}
+.nacts .sum{border-color:var(--accent2);color:var(--accent2)}
+.nacts .del{color:var(--danger);border-color:var(--danger);margin-left:auto}
+
+.sblock{margin:0 16px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+.sblock label{display:block;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--text3);margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase}
+.sblock .hint{font-size:12px;color:var(--text3);margin-top:8px;line-height:1.7}
+.sblock .hint a{color:var(--accent2);text-decoration:none}
+
+.moverlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:none;align-items:flex-end;justify-content:center;padding:12px}
+.moverlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:600px;max-height:82vh;display:flex;flex-direction:column;overflow:hidden}
+.mhead{padding:15px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.mtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--accent);letter-spacing:.05em}
+.mclose{background:none;border:none;color:var(--text3);cursor:pointer;font-size:24px;line-height:1;padding:0 4px}
+.mbody{padding:18px;overflow-y:auto;flex:1;font-size:14px;line-height:1.75;color:var(--text2)}
+.mfoot{padding:13px 18px;border-top:1px solid var(--border);display:flex;gap:10px}
+
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent2);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{padding:44px 24px;text-align:center;color:var(--text3);font-size:14px;line-height:1.9}
+.empty .ico{font-size:34px;margin-bottom:12px}
+.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text2);opacity:0;transition:all .25s;z-index:400;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@keyframes wv{from{height:4px}to{height:26px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Voice<span>Note</span></div>
+  <div class="hdate" id="hdate"></div>
+</header>
+
+<!-- SUBJECTS -->
+<div class="screen active" id="screen-subjects">
+  <div class="stitle">Your Subjects</div>
+  <div class="addbar">
+    <input class="ifield" id="newSubjectInput" placeholder="New subject name…" maxlength="80"/>
+    <button class="btn" onclick="addSubject()">+ Add</button>
+  </div>
+  <div class="slist" id="subjectsList"></div>
+</div>
+
+<!-- RECORD -->
+<div class="screen" id="screen-record">
+
+  <!-- Mic permission banner -->
+  <div id="micBanner" style="display:none;margin:12px 16px 0">
+    <div id="micPrompt" style="display:none;background:var(--surface);border:1px solid var(--accent);border-radius:var(--r);padding:16px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);font-weight:600;letter-spacing:.06em;margin-bottom:8px">🎙 MICROPHONE PERMISSION NEEDED</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">Tap below — Chrome will show a permission popup. Tap <strong style="color:var(--text)">Allow</strong>.</div>
+      <button class="btn blk" onclick="requestMicPermission()">Tap to Enable Microphone</button>
+    </div>
+    <div id="micDenied" style="display:none;background:var(--surface);border:1px solid var(--danger);border-radius:var(--r);padding:16px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--danger);font-weight:600;letter-spacing:.06em;margin-bottom:10px">⚠ MICROPHONE BLOCKED</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.9;margin-bottom:14px">
+        1. Tap <strong style="color:var(--text)">🔒</strong> in Chrome's address bar<br>
+        2. Tap <strong style="color:var(--text)">Permissions</strong><br>
+        3. Set <strong style="color:var(--text)">Microphone → Allow</strong><br>
+        4. Reload the page
+      </div>
+      <button class="btn blk" onclick="requestMicPermission()">Try Again</button>
+    </div>
+    <div id="micGranted" style="display:none;background:var(--surface);border:1px solid var(--accent2);border-radius:var(--r);padding:12px 16px;font-size:13px;color:var(--accent2);font-family:'IBM Plex Mono',monospace">
+      ✓ Microphone allowed — ready to record
+    </div>
+  </div>
+
+  <div class="stitle">Active Subject</div>
+  <div id="subjectDisplay" style="margin-bottom:4px"></div>
+
+  <div class="stitle">Record</div>
+  <div class="recarea">
+    <div class="rstatus">
+      <div class="rdot" id="rdot"></div>
+      <span id="recStatusText">Ready to record</span>
+    </div>
+    <div class="rtimer" id="recTimer">00:00</div>
+    <div class="waveform">
+      <div class="wbar" id="wb0"></div><div class="wbar" id="wb1"></div>
+      <div class="wbar" id="wb2"></div><div class="wbar" id="wb3"></div>
+      <div class="wbar" id="wb4"></div><div class="wbar" id="wb5"></div>
+      <div class="wbar" id="wb6"></div><div class="wbar" id="wb7"></div>
+    </div>
+    <div class="rbwrap">
+      <div class="pring" id="pring"></div>
+      <button class="rbtn" id="recordBtn" onclick="toggleRecord()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"/>
+          <path d="M5 10a7 7 0 0014 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8" y1="22" x2="16" y2="22"/>
+        </svg>
+      </button>
+    </div>
+    <div class="rhint" id="rhint">TAP TO START RECORDING</div>
+  </div>
+
+  <div class="stitle">Live Transcript</div>
+  <div class="tbox" id="transcriptBox"><span class="tph">Transcript appears here while recording…</span></div>
+  <div class="ractbar">
+    <button class="btn sec" onclick="clearTranscript()">Clear</button>
+    <button class="btn" onclick="saveNote()">Save Note</button>
+  </div>
+
+  <div class="stitle">Add Notes Manually</div>
+  <div class="mbox">
+    <textarea id="manualInput" rows="3" placeholder="Type notes here…"></textarea>
+    <div style="margin-top:8px"><button class="btn blk" onclick="appendManual()">Append to Transcript ↑</button></div>
+  </div>
+</div>
+
+<!-- NOTES -->
+<div class="screen" id="screen-notes">
+  <div class="stitle">Filter by Subject</div>
+  <div class="nfilter" id="notesFilter"></div>
+  <div class="stitle">Saved Notes</div>
+  <div class="nlist" id="notesList"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="screen" id="screen-settings">
+  <div class="stitle">Claude API Key</div>
+  <div class="sblock">
+    <label>Anthropic API Key (for AI Summary)</label>
+    <input type="password" class="ifield" id="apiKeyInput" placeholder="sk-ant-…" autocomplete="off" style="font-family:'IBM Plex Mono',monospace;font-size:13px"/>
+    <div class="hint">Stored only on this device. Get one free at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></div>
+    <div style="margin-top:12px"><button class="btn blk" onclick="saveApiKey()">Save Key</button></div>
+  </div>
+  <div class="stitle">Speech Language</div>
+  <div class="sblock">
+    <label>Recognition Language</label>
+    <select id="langSelect" class="ifield" style="cursor:pointer">
+      <option value="en-US">English (US)</option>
+      <option value="en-GB">English (UK)</option>
+      <option value="en-IN">English (India)</option>
+      <option value="hi-IN">Hindi</option>
+      <option value="es-ES">Spanish</option>
+      <option value="fr-FR">French</option>
+      <option value="de-DE">German</option>
+      <option value="zh-CN">Chinese (Mandarin)</option>
+      <option value="ja-JP">Japanese</option>
+      <option value="ar-SA">Arabic</option>
+      <option value="pt-BR">Portuguese (Brazil)</option>
+    </select>
+    <div style="margin-top:12px"><button class="btn blk" onclick="saveLang()">Save Language</button></div>
+  </div>
+  <div class="stitle">Install as App</div>
+  <div class="sblock">
+    <div style="font-size:13px;color:var(--text2);line-height:1.9">
+      <strong style="color:var(--text)">Android Chrome:</strong><br>
+      Tap ⋮ menu → <strong>Add to Home screen</strong><br><br>
+      <strong style="color:var(--text)">iPhone Safari:</strong><br>
+      Tap Share → <strong>Add to Home Screen</strong><br><br>
+      Once installed, it runs as a standalone app with full microphone access.
+    </div>
+    <div style="margin-top:12px" id="installBtnWrap" style="display:none">
+      <button class="btn blk" id="installBtn" onclick="installPWA()">Install App</button>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <button class="active" id="nav-subjects" onclick="showScreen('subjects')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+    Subjects
+  </button>
+  <button id="nav-record" onclick="showScreen('record')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <rect x="9" y="2" width="6" height="12" rx="3"/>
+      <path d="M5 10a7 7 0 0014 0"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
+      <line x1="8" y1="22" x2="16" y2="22"/>
+    </svg>
+    Record
+  </button>
+  <button id="nav-notes" onclick="showScreen('notes')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>
+    Notes
+  </button>
+  <button id="nav-settings" onclick="showScreen('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Settings
+  </button>
+</nav>
+
+<!-- SUMMARY MODAL -->
+<div class="moverlay" id="summaryModal">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle" id="summaryTitle">SUMMARY</div><button class="mclose" onclick="closeModal('summaryModal')">×</button></div>
+    <div class="mbody" id="summaryBody"></div>
+    <div class="mfoot">
+      <button class="btn sec" onclick="closeModal('summaryModal')">Close</button>
+      <button class="btn" onclick="copySummary()">Copy</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUBJECT PICKER -->
+<div class="moverlay" id="pickerModal">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle">SELECT SUBJECT</div><button class="mclose" onclick="closeModal('pickerModal')">×</button></div>
+    <div class="mbody" id="pickerList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ── storage ── */
+function lsGet(k,d){try{var v=localStorage.getItem(k);return v!==null?JSON.parse(v):d;}catch(e){return d;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){showToast('Storage error');}}
+
+/* ── state ── */
+var subjects=lsGet('vn_subjects',[]);
+var notes=lsGet('vn_notes',[]);
+var apiKey=lsGet('vn_apikey','');
+var srLang=lsGet('vn_lang','en-US');
+var activeSubject=null;
+var activeFilter='all';
+var mediaStream=null;
+var recognition=null;
+var audioCtx=null;
+var waveInterval=null;
+var isRecording=false;
+var timerInterval=null;
+var seconds=0;
+var finalT='';
+var interimT='';
+var deferredInstall=null;
+
+/* ── init ── */
+document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+document.getElementById('apiKeyInput').value=apiKey;
+document.getElementById('langSelect').value=srLang;
+renderSubjects();
+renderNotes();
+updateSubjectDisplay();
+checkMicPermission();
+
+/* PWA install prompt */
+window.addEventListener('beforeinstallprompt',function(e){
+  e.preventDefault();
+  deferredInstall=e;
+  document.getElementById('installBtnWrap').style.display='block';
+});
+
+/* Service worker */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+
+/* ── mic permission ── */
+function checkMicPermission(){
+  if(!navigator.permissions||!navigator.permissions.query){showMicBanner('prompt');return;}
+  navigator.permissions.query({name:'microphone'}).then(function(r){
+    showMicBanner(r.state);
+    r.onchange=function(){showMicBanner(r.state);};
+  }).catch(function(){showMicBanner('prompt');});
+}
+
+function showMicBanner(state){
+  var banner=document.getElementById('micBanner');
+  var prompt=document.getElementById('micPrompt');
+  var denied=document.getElementById('micDenied');
+  var granted=document.getElementById('micGranted');
+  prompt.style.display='none';
+  denied.style.display='none';
+  granted.style.display='none';
+  if(state==='granted'){
+    banner.style.display='block';
+    granted.style.display='block';
+    setTimeout(function(){banner.style.display='none';},3000);
+  }else if(state==='denied'){
+    banner.style.display='block';
+    denied.style.display='block';
+  }else{
+    banner.style.display='block';
+    prompt.style.display='block';
+  }
+}
+
+function requestMicPermission(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    showToast('Not supported in this browser');return;
+  }
+  navigator.mediaDevices.getUserMedia({audio:true,video:false})
+    .then(function(stream){
+      stream.getTracks().forEach(function(t){t.stop();});
+      showMicBanner('granted');
+      showToast('Microphone enabled ✓');
+    })
+    .catch(function(err){
+      if(err.name==='NotAllowedError'||err.name==='PermissionDeniedError'){
+        showMicBanner('denied');
+      }else{
+        showToast('Error: '+(err.message||err.name));
+      }
+    });
+}
+
+/* ── nav ── */
+function showScreen(n){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('screen-'+n).classList.add('active');
+  document.getElementById('nav-'+n).classList.add('active');
+  if(n==='record')updateSubjectDisplay();
+  if(n==='notes')renderNotes();
+}
+
+/* ── subjects ── */
+function addSubject(){
+  var el=document.getElementById('newSubjectInput');
+  var name=el.value.trim();
+  if(!name){showToast('Enter a subject name');return;}
+  for(var i=0;i<subjects.length;i++){if(subjects[i].name.toLowerCase()===name.toLowerCase()){showToast('Already exists');return;}}
+  subjects.unshift({id:String(Date.now()),name:name,created:new Date().toISOString()});
+  lsSet('vn_subjects',subjects);
+  el.value='';renderSubjects();showToast('Subject added ✓');
+}
+document.getElementById('newSubjectInput').addEventListener('keydown',function(e){if(e.key==='Enter')addSubject();});
+
+function renderSubjects(){
+  var el=document.getElementById('subjectsList');
+  if(!subjects.length){el.innerHTML='<div class="empty"><div class="ico">📁</div>No subjects yet.<br>Add one above to get started.</div>';return;}
+  el.innerHTML=subjects.map(function(s){
+    var c=notes.filter(function(n){return n.subjectId===s.id;}).length;
+    var sel=(activeSubject&&activeSubject.id===s.id)?'sel':'';
+    return '<div class="scard '+sel+'" onclick="selectSubject(\''+s.id+'\')">'+
+      '<div><div class="sname">'+esc(s.name)+'</div><div class="smeta">'+c+' note'+(c!==1?'s':'')+'</div></div>'+
+      '<div class="sbadge">'+c+'</div></div>';
+  }).join('');
+}
+
+function selectSubject(id){
+  activeSubject=null;
+  for(var i=0;i<subjects.length;i++){if(subjects[i].id===id){activeSubject=subjects[i];break;}}
+  renderSubjects();updateSubjectDisplay();
+  if(activeSubject)showToast('"'+activeSubject.name+'" selected');
+}
+
+function updateSubjectDisplay(){
+  var el=document.getElementById('subjectDisplay');
+  if(!el)return;
+  if(activeSubject){
+    el.innerHTML='<div class="spill">'+
+      '<div><div class="pill-name">'+esc(activeSubject.name)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);font-family:\'IBM Plex Mono\',monospace;margin-top:2px">active subject</div></div>'+
+      '<div class="pill-chg" onclick="openPicker()">Change ›</div></div>';
+  }else{
+    el.innerHTML='<div class="nowarn">No subject — <span onclick="openPicker()">tap to select one</span></div>';
+  }
+}
+
+/* ── picker ── */
+function openPicker(){
+  var el=document.getElementById('pickerList');
+  if(!subjects.length){el.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px;font-size:13px">No subjects yet.</div>';}
+  else{el.innerHTML=subjects.map(function(s){return '<div onclick="pickSubject(\''+s.id+'\')" style="padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px;font-size:15px;font-weight:500">'+esc(s.name)+'</div>';}).join('');}
+  document.getElementById('pickerModal').classList.add('open');
+}
+function pickSubject(id){
+  activeSubject=null;
+  for(var i=0;i<subjects.length;i++){if(subjects[i].id===id){activeSubject=subjects[i];break;}}
+  closeModal('pickerModal');updateSubjectDisplay();renderSubjects();
+}
+
+/* ── recording ── */
+function toggleRecord(){if(isRecording)stopRecording();else startRecording();}
+
+function startRecording(){
+  if(!activeSubject){showToast('Select a subject first!');return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showToast('Microphone API not available');return;}
+  finalT='';interimT='';renderTranscript();
+  document.getElementById('recStatusText').textContent='Requesting mic…';
+
+  navigator.mediaDevices.getUserMedia({audio:true,video:false})
+    .then(function(stream){
+      mediaStream=stream;
+      isRecording=true;seconds=0;
+      timerInterval=setInterval(function(){
+        seconds++;
+        var m=String(Math.floor(seconds/60)).padStart(2,'0');
+        var s=String(seconds%60).padStart(2,'0');
+        document.getElementById('recTimer').textContent=m+':'+s;
+      },1000);
+      startWaveform(stream);
+      startSR();
+      document.getElementById('recordBtn').classList.add('on');
+      document.getElementById('pring').classList.add('on');
+      document.getElementById('rdot').classList.add('on');
+      document.getElementById('rhint').textContent='TAP TO STOP';
+      showMicBanner('granted');
+    })
+    .catch(function(err){
+      document.getElementById('recStatusText').textContent='Ready to record';
+      if(err.name==='NotAllowedError'||err.name==='PermissionDeniedError'){
+        showMicBanner('denied');
+      }else if(err.name==='NotFoundError'){
+        showToast('No microphone found');
+      }else{
+        showToast('Mic error: '+(err.message||err.name));
+      }
+    });
+}
+
+function stopRecording(){
+  isRecording=false;
+  clearInterval(timerInterval);clearInterval(waveInterval);
+  [0,1,2,3,4,5,6,7].forEach(function(i){
+    var b=document.getElementById('wb'+i);
+    b.style.height='4px';b.style.animation='';b.classList.remove('on');
+  });
+  if(recognition){try{recognition.stop();}catch(e){}recognition=null;}
+  if(audioCtx){try{audioCtx.close();}catch(e){}audioCtx=null;}
+  if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
+  if(interimT.trim()){finalT+=interimT.trim()+' ';interimT='';renderTranscript();}
+  document.getElementById('recordBtn').classList.remove('on');
+  document.getElementById('pring').classList.remove('on');
+  document.getElementById('rdot').classList.remove('on');
+  document.getElementById('recStatusText').textContent='Ready to record';
+  document.getElementById('rhint').textContent='TAP TO START RECORDING';
+}
+
+function startWaveform(stream){
+  try{
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    var src=audioCtx.createMediaStreamSource(stream);
+    var analyser=audioCtx.createAnalyser();
+    analyser.fftSize=64;src.connect(analyser);
+    var data=new Uint8Array(analyser.frequencyBinCount);
+    var bars=[0,1,2,3,4,5,6,7].map(function(i){return document.getElementById('wb'+i);});
+    bars.forEach(function(b){b.classList.add('on');});
+    waveInterval=setInterval(function(){
+      analyser.getByteFrequencyData(data);
+      bars.forEach(function(b,i){var v=data[i*2]||0;b.style.height=(4+Math.round((v/255)*24))+'px';});
+    },80);
+  }catch(e){
+    [0,1,2,3,4,5,6,7].forEach(function(i){
+      var b=document.getElementById('wb'+i);b.classList.add('on');
+      b.style.animation='wv '+(0.5+Math.random()*0.7)+'s ease-in-out '+(Math.random()*0.4)+'s infinite alternate';
+    });
+  }
+}
+
+function startSR(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){document.getElementById('recStatusText').textContent='Recording (type notes below)';return;}
+  recognition=new SR();
+  recognition.continuous=true;recognition.interimResults=true;recognition.lang=srLang;recognition.maxAlternatives=1;
+  recognition.onresult=function(e){
+    interimT='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      var t=e.results[i][0].transcript;
+      if(e.results[i].isFinal)finalT+=t+' ';else interimT+=t;
+    }
+    renderTranscript();
+  };
+  recognition.onerror=function(e){
+    if(e.error==='not-allowed'){stopRecording();showToast('Mic permission denied');}
+    else if(e.error==='network'){document.getElementById('recStatusText').textContent='Recording (no SR network)';}
+  };
+  recognition.onend=function(){if(isRecording){try{recognition.start();}catch(x){}}};
+  try{recognition.start();document.getElementById('recStatusText').textContent='Listening…';}catch(x){}
+}
+
+/* ── transcript ── */
+function renderTranscript(){
+  var box=document.getElementById('transcriptBox');
+  var full=(finalT+interimT).trim();
+  if(!full){box.innerHTML='<span class="tph">Transcript appears here while recording…</span>';return;}
+  box.innerHTML=esc(finalT)+(interimT?'<span class="interim"> '+esc(interimT)+'</span>':'');
+  box.scrollTop=box.scrollHeight;
+}
+function clearTranscript(){finalT='';interimT='';renderTranscript();}
+function appendManual(){
+  var el=document.getElementById('manualInput');
+  var text=el.value.trim();
+  if(!text){showToast('Nothing to add');return;}
+  if(!activeSubject){showToast('Select a subject first!');return;}
+  finalT+=(finalT.trim()?' ':'')+text;el.value='';renderTranscript();showToast('Added ✓');
+}
+
+/* ── save note ── */
+function saveNote(){
+  if(!activeSubject){showToast('No subject selected');return;}
+  var text=(finalT+interimT).trim();
+  if(!text){showToast('Nothing to save');return;}
+  notes.unshift({id:String(Date.now()),subjectId:activeSubject.id,subjectName:activeSubject.name,text:text,duration:seconds,created:new Date().toISOString(),summary:null});
+  lsSet('vn_notes',notes);clearTranscript();
+  document.getElementById('recTimer').textContent='00:00';seconds=0;
+  renderSubjects();renderNotes();showToast('Note saved ✓');showScreen('notes');
+}
+
+/* ── notes ── */
+function renderNotes(){
+  document.getElementById('notesFilter').innerHTML=
+    '<div class="chip '+(activeFilter==='all'?'on':'')+'" onclick="setFilter(\'all\')">All</div>'+
+    subjects.map(function(s){return '<div class="chip '+(activeFilter===s.id?'on':'')+'" onclick="setFilter(\''+s.id+'\')">'+esc(s.name)+'</div>';}).join('');
+  var list=document.getElementById('notesList');
+  var filtered=activeFilter==='all'?notes:notes.filter(function(n){return n.subjectId===activeFilter;});
+  if(!filtered.length){list.innerHTML='<div class="empty"><div class="ico">🗒</div>No notes yet.<br>Record a discussion and save it.</div>';return;}
+  list.innerHTML=filtered.map(function(note){
+    var d=new Date(note.created);
+    var ds=d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    var ts=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    var min=note.duration?Math.floor(note.duration/60)+':'+String(note.duration%60).padStart(2,'0')+' min':'';
+    var pv=note.text.length>220?note.text.slice(0,220)+'…':note.text;
+    return '<div class="ncard">'+
+      '<div class="nhead"><div class="ntag">'+esc(note.subjectName)+'</div>'+
+      '<div class="ndate">'+ds+' · '+ts+(min?' · '+min:'')+'</div></div>'+
+      '<div class="nbody">'+esc(pv)+'</div>'+
+      '<div class="nacts">'+
+        '<button class="sum" onclick="summarizeNote(\''+note.id+'\')">✦ AI Summary</button>'+
+        '<button onclick="viewFull(\''+note.id+'\')">Full Note</button>'+
+        '<button class="del" onclick="deleteNote(\''+note.id+'\')">Delete</button>'+
+      '</div></div>';
+  }).join('');
+}
+function setFilter(f){activeFilter=f;renderNotes();}
+function deleteNote(id){
+  if(!confirm('Delete this note?'))return;
+  notes=notes.filter(function(n){return n.id!==id;});lsSet('vn_notes',notes);renderNotes();renderSubjects();showToast('Deleted');
+}
+function viewFull(id){
+  var note=null;for(var i=0;i<notes.length;i++){if(notes[i].id===id){note=notes[i];break;}}
+  if(!note)return;
+  var d=new Date(note.created);
+  document.getElementById('summaryTitle').textContent='NOTE — '+note.subjectName.toUpperCase();
+  document.getElementById('summaryBody').innerHTML=
+    '<div style="font-size:11px;color:var(--text3);font-family:\'IBM Plex Mono\',monospace;margin-bottom:14px">'+
+    d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</div>'+
+    '<div style="white-space:pre-wrap;font-size:14px;line-height:1.8">'+esc(note.text)+'</div>';
+  document.getElementById('summaryModal').classList.add('open');
+}
+
+/* ── AI summary ── */
+function summarizeNote(id){
+  var key=lsGet('vn_apikey','');
+  if(!key){showToast('Add API key in Settings first');showScreen('settings');return;}
+  var note=null;for(var i=0;i<notes.length;i++){if(notes[i].id===id){note=notes[i];break;}}
+  if(!note)return;
+  document.getElementById('summaryTitle').textContent='AI SUMMARY — '+note.subjectName.toUpperCase();
+  document.getElementById('summaryBody').innerHTML='<div style="display:flex;align-items:center;gap:12px;color:var(--text3)"><div class="spinner"></div> Generating…</div>';
+  document.getElementById('summaryModal').classList.add('open');
+  var d=new Date(note.created);
+  var dl=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  var prompt='Summarize this voice-recorded discussion.\nSubject: "'+note.subjectName+'" — Date: '+dl+'\n\nProvide:\n1. **Key Points**\n2. **Decisions / Outcomes**\n3. **Action Items**\n4. **Overall Summary** (2-3 sentences)\n\nTranscript:\n'+note.text;
+  var noteRef=note;
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,messages:[{role:'user',content:prompt}]})
+  }).then(function(res){
+    if(!res.ok)return res.json().then(function(e){throw new Error(e.error&&e.error.message?e.error.message:'HTTP '+res.status);});
+    return res.json();
+  }).then(function(data){
+    var text=(data.content||[]).map(function(c){return c.text||'';}).join('');
+    var html=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>');
+    document.getElementById('summaryBody').innerHTML='<div style="font-size:11px;color:var(--text3);font-family:\'IBM Plex Mono\',monospace;margin-bottom:14px">'+dl+'</div><p>'+html+'</p>';
+    noteRef.summary=text;lsSet('vn_notes',notes);
+  }).catch(function(err){
+    document.getElementById('summaryBody').innerHTML='<div style="color:var(--danger);line-height:1.8"><strong>Failed</strong><br><br>'+esc(err.message)+'<br><br>Check API key in Settings.</div>';
+  });
+}
+
+/* ── settings ── */
+function saveApiKey(){
+  var val=document.getElementById('apiKeyInput').value.trim();
+  if(!val){showToast('Enter a key');return;}
+  apiKey=val;lsSet('vn_apikey',val);showToast('API key saved ✓');
+}
+function saveLang(){srLang=document.getElementById('langSelect').value;lsSet('vn_lang',srLang);showToast('Language saved ✓');}
+
+/* ── PWA install ── */
+function installPWA(){
+  if(deferredInstall){deferredInstall.prompt();deferredInstall.userChoice.then(function(){deferredInstall=null;});}
+}
+
+/* ── modal ── */
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function copySummary(){
+  var text=document.getElementById('summaryBody').innerText;
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){showToast('Copied ✓');});}
+  else{var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Copied ✓');}
+}
+document.getElementById('summaryModal').addEventListener('click',function(e){if(e.target===this)closeModal('summaryModal');});
+document.getElementById('pickerModal').addEventListener('click',function(e){if(e.target===this)closeModal('pickerModal');});
+
+/* ── utils ── */
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+var toastTimer;
+function showToast(msg){
+  var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show');},2600);
+}
+</script>
+</body>
+</html>
