@@ -995,17 +995,14 @@ function authDrive(callback){
 function uploadToDrive(filename, text, callback){
   var meta = JSON.stringify({name: filename, mimeType:'text/plain'});
   var boundary = 'VoiceNoteBoundary';
-  var body = '--'+boundary+'
-Content-Type: application/json; charset=UTF-8
-
-'
-    +meta+'
---'+boundary+'
-Content-Type: text/plain; charset=UTF-8
-
-'
-    +text+'
---'+boundary+'--';
+  var CRLF = '\r\n';
+  var body = '--'+boundary+CRLF
+    +'Content-Type: application/json; charset=UTF-8'+CRLF+CRLF
+    +meta+CRLF
+    +'--'+boundary+CRLF
+    +'Content-Type: text/plain; charset=UTF-8'+CRLF+CRLF
+    +text+CRLF
+    +'--'+boundary+'--';
   fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
     method:'POST',
     headers:{
