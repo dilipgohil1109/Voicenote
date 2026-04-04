@@ -263,12 +263,20 @@ nav button svg{width:20px;height:20px}
   </div>
   <div class="stitle">Google Drive</div>
   <div class="sblock">
-    <label>Google Client ID (for Drive export)</label>
-    <input type="text" class="ifield" id="gClientId" placeholder="123456789.apps.googleusercontent.com" style="font-size:12px;font-family:'IBM Plex Mono',monospace"/>
-    <div class="hint">
-      Free setup at <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a><br>
-      Create project → Enable Drive API → OAuth 2.0 Client ID (Web) → add your GitHub Pages URL as Authorized Origin → paste Client ID here.<br>
-      Or skip this — use <strong style="color:var(--accent)">Email</strong> export instead which needs no setup.
+    <label>Google OAuth Client ID</label>
+    <input type="text" class="ifield" id="gClientId" placeholder="865895909822-xxx.apps.googleusercontent.com" style="font-size:12px;font-family:'IBM Plex Mono',monospace"/>
+    <div class="hint" style="margin-top:10px;font-size:12px;line-height:1.9">
+      <strong style="color:var(--text)">One-time setup in Google Cloud Console:</strong><br>
+      1. Open <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a><br>
+      2. Select your project → <strong>APIs &amp; Services → OAuth consent screen</strong><br>
+      &nbsp;&nbsp;&nbsp;→ set User Type: <strong>External</strong> → fill App name → Save<br>
+      3. <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth 2.0 Client ID</strong><br>
+      &nbsp;&nbsp;&nbsp;→ Application type: <strong>Web application</strong><br>
+      4. <strong>Authorised JavaScript origins</strong> — add:<br>
+      &nbsp;&nbsp;&nbsp;<code style="color:var(--accent2)">https://dilipgohil1109.github.io</code><br>
+      5. <strong>No redirect URI needed</strong> — leave that section empty<br>
+      6. Click Save → copy the Client ID → paste above → tap Save<br><br>
+      <strong style="color:var(--accent)">No Drive setup?</strong> Use Email or Download — both work instantly with zero config.
     </div>
     <div style="margin-top:12px;display:flex;gap:8px">
       <button class="btn blk" onclick="saveGClientId()" style="flex:1">Save Client ID</button>
@@ -457,6 +465,7 @@ function showScreen(n){
   document.getElementById('nav-'+n).classList.add('active');
   if(n==='record')updateSubjectDisplay();
   if(n==='notes')renderNotes();
+  if(n==='settings')showRedirectUri();
 }
 
 /* ── subjects ── */
@@ -919,19 +928,37 @@ function exportAllDownload(){
 
 /* ── GOOGLE DRIVE ───────────────────────────────────────────────────── */
 var gDriveToken = null;
+var gisClient = null;
+
+function showRedirectUri(){} // no longer needed but kept to avoid errors
+
+function copyRedirectUri(){} // no longer needed
 
 function saveGClientId(){
   var val = document.getElementById('gClientId').value.trim();
   if(!val){showToast('Enter a Client ID');return;}
   gClientIdVal = val;
   lsSet('vn_gclientid', val);
+  gDriveToken = null; // reset token when client ID changes
+  gisClient = null;
+  document.getElementById('driveAuthStatus').textContent = '';
   showToast('Client ID saved ✓');
 }
 
 function signOutDrive(){
   gDriveToken = null;
+  gisClient = null;
   document.getElementById('driveAuthStatus').textContent = 'Signed out';
   showToast('Signed out of Drive');
+}
+
+function loadGIS(callback){
+  if(window.google && window.google.accounts){callback();return;}
+  var s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.onload = callback;
+  s.onerror = function(){ showToast('Failed to load Google sign-in library'); };
+  document.head.appendChild(s);
 }
 
 function authDrive(callback){
@@ -941,72 +968,59 @@ function authDrive(callback){
     showScreen('settings');
     return;
   }
-  // Open Google OAuth popup
-  var redirectUri = window.location.origin + window.location.pathname;
-  var scope = 'https://www.googleapis.com/auth/drive.file';
-  var url = 'https://accounts.google.com/o/oauth2/v2/auth'
-    +'?client_id='+encodeURIComponent(gClientIdVal)
-    +'&redirect_uri='+encodeURIComponent(redirectUri)
-    +'&response_type=token'
-    +'&scope='+encodeURIComponent(scope);
-
-  var popup = window.open(url, 'gdrive_auth', 'width=500,height=600');
-  var timer = setInterval(function(){
+  loadGIS(function(){
     try{
-      if(!popup || popup.closed){ clearInterval(timer); return; }
-      var href = popup.location.href;
-      if(href.indexOf(redirectUri) === 0){
-        clearInterval(timer);
-        popup.close();
-        var hash = href.split('#')[1] || '';
-        var params = {};
-        hash.split('&').forEach(function(p){
-          var kv = p.split('=');
-          params[kv[0]] = decodeURIComponent(kv[1]||'');
-        });
-        if(params.access_token){
-          gDriveToken = params.access_token;
+      gisClient = google.accounts.oauth2.initTokenClient({
+        client_id: gClientIdVal,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: function(response){
+          if(response.error){
+            showToast('Drive sign-in failed: '+response.error);
+            document.getElementById('driveAuthStatus').textContent = 'Error: '+response.error;
+            return;
+          }
+          gDriveToken = response.access_token;
           document.getElementById('driveAuthStatus').textContent = '✓ Signed in to Google Drive';
           showToast('Google Drive connected ✓');
           callback();
-        } else {
-          showToast('Drive sign-in failed');
         }
-      }
-    }catch(e){ /* cross-origin — keep waiting */ }
-  }, 500);
+      });
+      gisClient.requestAccessToken();
+    }catch(e){
+      showToast('Drive auth error: '+e.message);
+    }
+  });
 }
 
 function uploadToDrive(filename, text, callback){
-  var boundary = '-------VoiceNoteBoundary';
   var meta = JSON.stringify({name: filename, mimeType:'text/plain'});
-  var body = '--'+boundary+'\r\n'
-    +'Content-Type: application/json; charset=UTF-8\r\n\r\n'
-    +meta+'\r\n'
-    +'--'+boundary+'\r\n'
-    +'Content-Type: text/plain; charset=UTF-8\r\n\r\n'
-    +text+'\r\n'
-    +'--'+boundary+'--';
+  var boundary = 'VoiceNoteBoundary';
+  var body = '--'+boundary+'
+Content-Type: application/json; charset=UTF-8
 
-  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+'
+    +meta+'
+--'+boundary+'
+Content-Type: text/plain; charset=UTF-8
+
+'
+    +text+'
+--'+boundary+'--';
+  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
     method:'POST',
     headers:{
-      'Authorization': 'Bearer '+gDriveToken,
-      'Content-Type': 'multipart/related; boundary="'+boundary+'"'
+      'Authorization':'Bearer '+gDriveToken,
+      'Content-Type':'multipart/related; boundary="'+boundary+'"'
     },
     body: body
   })
   .then(function(r){
-    if(r.status===401){gDriveToken=null;throw new Error('Token expired — please sign in again');}
+    if(r.status===401){gDriveToken=null;throw new Error('Session expired — tap Drive again to re-sign in');}
     if(!r.ok)throw new Error('Upload failed: HTTP '+r.status);
     return r.json();
   })
-  .then(function(data){
-    callback(null, data);
-  })
-  .catch(function(err){
-    callback(err);
-  });
+  .then(function(data){ callback(null,data); })
+  .catch(function(err){ callback(err); });
 }
 
 function driveNote(id){
@@ -1014,27 +1028,27 @@ function driveNote(id){
   for(var i=0;i<notes.length;i++){if(notes[i].id===id){note=notes[i];break;}}
   if(!note)return;
   authDrive(function(){
-    var text = buildNoteText(note, true);
-    var d = new Date(note.created).toISOString().slice(0,10);
-    var filename = 'VoiceNote_'+note.subjectName.replace(/[^a-zA-Z0-9]/g,'_')+'_'+d+'.txt';
+    var text=buildNoteText(note,true);
+    var d=new Date(note.created).toISOString().slice(0,10);
+    var filename='VoiceNote_'+note.subjectName.replace(/[^a-zA-Z0-9]/g,'_')+'_'+d+'.txt';
     showToast('Uploading to Drive…');
-    uploadToDrive(filename, text, function(err, data){
-      if(err){ showToast('Drive error: '+err.message); return; }
+    uploadToDrive(filename,text,function(err,data){
+      if(err){showToast('Drive error: '+err.message);return;}
       showToast('Saved to Drive: '+data.name+' ✓');
     });
   });
 }
 
 function exportAllDrive(){
-  var filtered = getFilteredNotes();
+  var filtered=getFilteredNotes();
   if(!filtered.length){showToast('No notes to export');return;}
   authDrive(function(){
-    var text = buildAllNotesText();
-    var label = activeFilter==='all' ? 'AllNotes' : filtered[0].subjectName.replace(/[^a-zA-Z0-9]/g,'_');
-    var filename = 'VoiceNote_Export_'+label+'_'+new Date().toISOString().slice(0,10)+'.txt';
+    var text=buildAllNotesText();
+    var label=activeFilter==='all'?'AllNotes':filtered[0].subjectName.replace(/[^a-zA-Z0-9]/g,'_');
+    var filename='VoiceNote_Export_'+label+'_'+new Date().toISOString().slice(0,10)+'.txt';
     showToast('Uploading to Drive…');
-    uploadToDrive(filename, text, function(err, data){
-      if(err){ showToast('Drive error: '+err.message); return; }
+    uploadToDrive(filename,text,function(err,data){
+      if(err){showToast('Drive error: '+err.message);return;}
       showToast('Saved to Drive: '+data.name+' ✓');
     });
   });
